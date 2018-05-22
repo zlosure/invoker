@@ -1,0 +1,196 @@
+---
+# Tasks to setup cluster environment. (VPN, NFS and Charts)
+
+# ------------------------------------------------------------------------------
+# Auth GCloud
+
+- name: find gcloud service account key files from local
+  find:
+    paths: /zlosure/invoker/credentials
+    patterns: '{{ setup_project_name }}-.*.json'
+    use_regex: yes
+  register: setup_service_account_keyfile
+
+- import_role:
+    name: common
+    tasks_from: auth-gcloud
+  vars:
+    common_keyfile_path: '{{ setup_service_account_keyfile.files[0].path }}'
+
+# ------------------------------------------------------------------------------
+# Create GCS bucket
+
+- name: look up GCS bucket for Helm chart repository
+  shell: gsutil ls gs://{{ setup_chart_repo_name }}
+  failed_when: false
+  register: setup_gcs_bucket
+
+- name: create GCS bucket for Helm chart repository
+  shell: >-
+    gsutil mb
+    -p {{ setup_project_name }}
+    -c regional
+    -l {{ setup_gcs_bucket_zone }}
+    gs://{{ setup_chart_repo_name }}
+  when: setup_gcs_bucket.rc != 0
+
+# ------------------------------------------------------------------------------
+# Initialize Helm and charts repository
+
+- name: lookup tiller account
+  shell: >-
+    kubectl get serviceAccounts
+    -n kube-system
+    -o jsonpath='{.items[?(@.metadata.name=="tiller")]}'
+  register: setup_tiller_account
+
+- block:
+    - name: create tiller service account
+      shell: kubectl create serviceaccount -n kube-system tiller
+
+    - name: create tiller cluster role binding
+      shell: >-
+        kubectl create clusterrolebinding
+        tiller-cluster-rule
+        --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
+
+  when: setup_tiller_account.stdout == ''
+
+- import_role:
+    name: common
+    tasks_from: init-helm
+
+# ------------------------------------------------------------------------------
+# VPN
+
+- name: look up VPN deployment
+  shell: >-
+    kubectl get deployment
+    -n ovpn
+    -o jsonpath='{.items[?(@.metadata.name=="ovpn-openvpn")]}'
+  register: setup_vpn_deployment
+
+- block:
+    - name: create compute disks for vpn
+      shell: >-
+        gcloud compute disks create gce-ovpn-disk
+        --project {{ setup_project_name }}
+        --size 1GB
+        --zone {{ setup_compute_zone }}
+
+    - name: create vpn namespace
+      shell: kubectl create ns ovpn
+
+    - name: install VPN
+      shell: helm install --name ovpn stable/openvpn --namespace ovpn --wait
+
+  when: setup_vpn_deployment.stdout == ''
+
+- name: get VPN service ip
+  shell: >-
+    kubectl get svc ovpn-openvpn
+    -n ovpn
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  register: setup_vpn_svc_ip
+  until: setup_vpn_svc_ip.stdout != ''
+  retries: 10
+  delay: 10
+
+- name: get VPN pod
+  shell: >-
+    kubectl get pods
+    -n ovpn
+    -l app=openvpn,release=ovpn
+    -o jsonpath='{ .items[0].metadata.name }'
+  register: setup_vpn_pod_name
+
+- name: set VPN keyfile name
+  set_fact:
+    setup_vpn_keyfile_name: '{{ setup_project_name }}-vpn'
+
+- name: look up VPN keyfile inside pod
+  shell: >-
+    kubectl exec
+    -n ovpn
+    -it {{ setup_vpn_pod_name.stdout }}
+    --
+    find /etc/openvpn/certs/pki/
+    -name "{{ setup_vpn_keyfile_name }}.ovpn"
+    -maxdepth 1 -mindepth 1 -type f
+  register: setup_vpn_keyfile_cluster
+
+- name: generate VPN keyfile
+  shell: >-
+    kubectl exec
+    -n ovpn
+    -it {{ setup_vpn_pod_name.stdout }}
+    /etc/openvpn/setup/newClientCert.sh
+    {{ setup_vpn_keyfile_name }} {{ setup_vpn_svc_ip.stdout }}
+  when: setup_vpn_keyfile_cluster.stdout == ''
+
+# ------------------------------------------------------------------------------
+# NFS server provisioner
+
+- name: look up NFS server provisioner
+  shell: >-
+    kubectl get statefulset
+    -n nfs
+    -o jsonpath='{.items[?(@.metadata.name=="nfs-server-provisioner")]}'
+  register: setup_nfs_server_provisioner
+
+- block:
+    - name: create nfs namespace
+      shell: kubectl create ns nfs
+
+    - name: install NFS server provisioner
+      shell: >-
+        helm install stable/nfs-server-provisioner
+        --name nfs-server-provisioner
+        --namespace nfs
+
+  when: setup_nfs_server_provisioner.stdout == ''
+
+# ------------------------------------------------------------------------------
+# Invoker
+
+- name: check invoker namespace
+  shell: kubectl get ns {{ setup_namespace }}
+  failed_when: false
+  register: setup_admin_namespace
+
+- name: create invoker namespace
+  shell: kubectl create ns {{ setup_namespace }}
+  when: setup_admin_namespace.rc != 0
+
+- import_role:
+    name: common
+    tasks_from: get-release-name
+  vars:
+    common_chart_name: 'invoker'
+    common_namespace: '{{ setup_namespace }}'
+
+# Immediately copy variables registered from another role should become a
+# convention to avoid implict variable usage and lookup.
+- set_fact:
+    setup_invoker_release: '{{ common_release_name }}'
+
+- name: install invoker to cluster
+  shell: invoker -a install -n {{ setup_namespace }} -t invoker
+  when: setup_invoker_release.stdout == ''
+
+# ------------------------------------------------------------------------------
+# Console
+
+- import_role:
+    name: common
+    tasks_from: get-release-name
+  vars:
+    common_chart_name: 'console'
+    common_namespace: '{{ setup_namespace }}'
+
+- set_fact:
+    setup_console_release: '{{ common_release_name }}'
+
+- name: install console to cluster
+  shell: invoker -a install -n {{ setup_namespace }} -t console
+  when: setup_console_release.stdout == ''

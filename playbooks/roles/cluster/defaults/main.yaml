@@ -1,0 +1,16 @@
+---
+cluster_chart_name: '{{ repo_name }}'
+cluster_chart_version: '{{ inspect_chart_version }}'
+cluster_charts_repo: '{{ ansible_env.CHARTS_REPO }}'
+cluster_cluster_name: '{{ ansible_env.CLUSTER_NAME }}'
+cluster_compute_zone: '{{ ansible_env.COMPUTE_ZONE }}'
+cluster_gcs_bucket_zone: '{{ ansible_env.GCS_BUCKET_ZONE }}'
+cluster_image_repository: '{{ inspect_image_repository }}'
+cluster_helm_package_repo: '{{ ansible_env.PROJECT_NAME }}-charts'
+cluster_namespace: '{{ namespace }}'
+cluster_project_name: '{{ ansible_env.PROJECT_NAME }}'
+cluster_target_branch: '{{ target_branch | default("master") }}'
+
+required_vars:
+  - namespace
+  - repo_name

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+. bin/logging
+
+# Umount NFS
+log_info "Unmounting NFS..."
+umount -f ~/zlosure/nfs
+log_info "Unmounted NFS."
+
+# Stop lsyncd
+log_info "Stopping lsyncd..."
+sudo pkill lsyncd
+log_info "Stopped lsyncd."

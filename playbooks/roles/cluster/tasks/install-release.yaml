@@ -1,0 +1,50 @@
+---
+# Helm install a release from a local or remote chart.
+
+# TODO: I want something like this
+# https://github.com/kubernetes/kubernetes/issues/41711, but can't.
+# Having this `kubectl` other than Helm here is not graceful.
+- name: special case to manually create invoker config in cluster
+  shell: >-
+    kubectl create configmap invoker -n {{ cluster_namespace }}
+    --from-literal=CHARTS_REPO={{ cluster_charts_repo }}
+    --from-literal=CLUSTER_NAME={{ cluster_cluster_name }}
+    --from-literal=COMPUTE_ZONE={{ cluster_compute_zone }}
+    --from-literal=GCS_BUCKET_ZONE={{ cluster_gcs_bucket_zone }}
+    --from-literal=PROJECT_NAME={{ cluster_project_name }}
+  when: cluster_chart_name == 'invoker'
+
+- block:
+    # Internal images.
+    - name: get image short hash from GCR
+      shell: >-
+        gcloud container images list-tags {{ cluster_image_repository.stdout }}
+        --filter={{ cluster_target_branch }} |
+        awk '$2 ~ /{{ cluster_target_branch }}/ { print $2 }' |
+        sed -e 's/{{ cluster_target_branch }}//' -e 's/,//'
+      register: cluster_git_hash
+
+    - name: install a release to k8s cluster with an internal image
+      shell: >-
+        helm install
+        {{ cluster_helm_package_repo }}/{{ cluster_chart_name }}
+        --version {{ cluster_chart_version.stdout }}
+        --set image.tag={{ cluster_git_hash.stdout }}
+        --namespace {{ cluster_namespace }}
+        --timeout 120
+        --wait
+
+  when: cluster_project_name in cluster_image_repository.stdout
+
+- block:
+    # External images.
+    - name: install a release to k8s cluster with an external image
+      shell: >-
+        helm install
+        {{ cluster_helm_package_repo }}/{{ cluster_chart_name }}
+        --version {{ cluster_chart_version.stdout }}
+        --namespace {{ cluster_namespace }}
+        --timeout 120
+        --wait
+
+  when: cluster_project_name not in cluster_image_repository.stdout

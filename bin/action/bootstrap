@@ -1,0 +1,139 @@
+#!/bin/bash
+
+unset -f docker
+
+set -o nounset
+set -o errexit
+
+source bin/logging
+source config/main.env
+
+usage() {
+    cat <<EOF
+
+    Invoker bootstrap CLI.
+
+EOF
+}
+
+while getopts "hn:t:" opt;
+do
+    case ${opt} in
+        h) usage
+           exit 0
+           ;;
+        n) namespace="$OPTARG"
+           ;;
+        t) target="$OPTARG"
+           ;;
+        ?)
+        ;;
+    esac
+done
+
+# Install Docker
+log_info "Installing Docker..."
+brew ls --versions docker &> /dev/null || brew install docker
+brew ls --versions docker-compose &> /dev/null || brew install docker-compose
+brew ls --versions docker-machine &> /dev/null || brew install docker-machine
+
+# Install Docker for Mac
+log_info "Installing Docker for Mac..."
+docker_app=$(find /Applications/ \
+                  -name "Docker.app" -maxdepth 1 -mindepth 1 -type d)
+if [ -z "$docker_app" ]; then
+    log_info "Docker for Mac isn't installed, installing..."
+    curl -OL https://download.docker.com/mac/stable/Docker.dmg
+    hdiutil verify Docker.dmg
+    hdiutil attach Docker.dmg -nobrowse
+    cp -R /Volumes/Docker/Docker.app /Applications/
+    hdiutil detach /Volumes/Docker
+    rm Docker.dmg
+    sudo /Applications/Docker.app/Contents/MacOS/Docker \
+         --quit-after-install --unattended
+else
+    log_info "Docker for Mac is already installed."
+fi
+
+# Start Docker server
+log_info "Starting Docker server..."
+docker_server_started=$(pgrep -x com.docker.supervisor || true)
+if [[ -z "$docker_server_started" ]]; then
+    log_info "Docker server hasn't been started, starting now..."
+    open -a docker --args --unattended
+else
+    log_info "Docker server is already started."
+fi
+
+docker_daemon_started=$(docker ps 2> /dev/null || true)
+while [[ -z "$docker_daemon_started" ]]; do
+    log_info "Waiting for docker daemon to start..."
+    sleep 5s
+    docker_daemon_started=$(docker ps 2> /dev/null || true)
+done
+log_info "Docker daemon is started."
+
+# Setup GKE cluster
+log_info "Bootstrapping..."
+docker run -e CONTAINER_LOCATION="local" \
+       --env-file config/main.env \
+       -v ${PWD}/credentials:/zlosure/invoker/credentials \
+       superstevenz/invoker \
+       ansible-playbook playbooks/bootstrap.yaml \
+       --tags setup:${target} \
+       --extra-vars namespace=${namespace}
+
+if [[ "${target}" == "local" ]]; then
+    # Install rsync
+    log_info "Installing rsync..."
+    brew ls --versions rsync &> /dev/null || brew install rsync
+
+    # Install lsyncd
+    log_info "Installing lsyncd..."
+    brew ls --versions lsyncd &> /dev/null || brew install lsyncd
+
+    # Install Tunnelblick
+    log_info "Installing Tunnelblick"
+    tunnelblick_app=$(find /Applications/ \
+                           -name "Tunnelblick.app" -maxdepth 1 -mindepth 1 -type d)
+    if [ -z "$tunnelblick_app" ]; then
+        log_info "Tunnelblick isn't installed, installing..."
+        curl -OL https://tunnelblick.net/release/Latest_Tunnelblick_Stable.dmg
+        hdiutil verify Latest_Tunnelblick_Stable.dmg
+        hdiutil attach Latest_Tunnelblick_Stable.dmg -nobrowse
+        cp -R /Volumes/Tunnelblick/Tunnelblick.app /Applications/
+        hdiutil detach /Volumes/Tunnelblick
+        rm Latest_Tunnelblick_Stable.dmg
+        sudo /Applications/Tunnelblick.app/Contents/MacOS/Tunnelblick \
+             --quit-after-install --unattended
+    else
+        log_info "Tunnelblick is already installed."
+    fi
+    open -a tunnelblick --args --unattended
+
+    log_info "Press ENTER after OpenVPN key file is added. (Under ${PWD}/credentials)"
+    read -p ""
+
+    # Mount NFS
+    log_info "Checking VPN connection..."
+    vpn_started=$(pgrep -x openvpn)
+    if [ -n "$vpn_started" ]; then
+        log_info "VPN is connected, mounting NFS..."
+        mkdir -p ~/zlosure/nfs
+        mount -t nfs -o soft personal-nfs-server.${namespace}.svc.cluster.local:/exports ~/zlosure/nfs
+    else
+        log_error "Did you forget to connect to VPN?"
+        exit 1
+    fi
+
+    # Setup file sync config file
+    source bin/create-sync-config
+
+    # Start file sync
+    log_info "Syncing local files to NFS..."
+    sudo lsyncd config/lsyncd.conf
+
+fi
+
+log_info "Use this link to access console: http://console.admin.svc.cluster.local:3449"
+log_info "${target} environment successfully bootstrapped, woohoo!"

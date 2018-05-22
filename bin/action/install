@@ -1,0 +1,44 @@
+#!/bin/bash
+
+unset -f docker
+
+set -o nounset
+set -o errexit
+
+usage() {
+    cat <<EOF
+
+    Invoker install CLI.
+
+EOF
+}
+
+while getopts "B:b:hn:r:t:" opt;
+do
+    case ${opt} in
+        B) charts_branch="$OPTARG"
+           ;;
+        b) target_branch="$OPTARG"
+           ;;
+        h) usage
+           exit 0
+           ;;
+        n) namespace="$OPTARG"
+           ;;
+        t) target="$OPTARG"
+           ;;
+        ?)
+        ;;
+    esac
+done
+
+current_dir=$(cd $(dirname "${BASH_SOURCE[0]}") >/dev/null && pwd)
+
+playbooks_dir=$(dirname $(dirname $current_dir))/playbooks
+
+ansible-playbook ${playbooks_dir}/install.yaml \
+                 --tags cluster:install \
+                 --extra-vars namespace=${namespace} \
+                 --extra-vars repo_name=${target} \
+                 ${charts_branch+--extra-vars charts_branch=${charts_branch}} \
+                 ${target_branch+--extra-vars target_branch=${target_branch}}

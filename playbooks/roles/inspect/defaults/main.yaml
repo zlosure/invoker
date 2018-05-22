@@ -1,0 +1,8 @@
+---
+inspect_chart_name: '{{ repo_name }}'
+inspect_charts_dir_local: '/zlosure/invoker/charts'
+inspect_charts_branch: '{{ charts_branch | default("master") }}'
+inspect_charts_repo: '{{ ansible_env.CHARTS_REPO }}'
+
+required_vars:
+  - repo_name

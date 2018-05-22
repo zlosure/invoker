@@ -1,0 +1,125 @@
+---
+# Recursively package chart archive from source code to package repository.
+
+# Therodically, a steps in this task should be in a block and share the same
+# `when` statement. However it doesn't work with dynamic variable, and things
+# will break.
+
+# We are manually packaging dependent charts instead of using `helm dep update`
+# because we want to add charts_branch name as semver suffix (pre-release) for
+# chart sematic version number. So that people working on the same chart don't
+# need to worry about the chart version, and we will create different charts
+# package for them based on the branch.
+
+- debug:
+    msg: "Enter {{ chart_current_chart }} {{ chart_current_version }}"
+
+- name: find the chart source code
+  stat:
+    path: '{{ chart_charts_dir }}/{{ chart_current_chart }}'
+  register: chart_chart_directory
+  failed_when: >-
+    not chart_chart_directory.stat.exists or
+    not chart_chart_directory.stat.isdir
+
+- name: check if chart archive already exists in package repository
+  shell: >-
+    helm search
+    -r '\v{{ chart_project_name }}-charts/{{ chart_current_chart }}\v'
+    -v {{ chart_current_version }}
+  register: chart_exists_{{ chart_current_chart }}
+
+- name: get chart's dependencies
+  shell: >-
+    helm dep list {{ chart_current_chart }} |
+    sed '1d;$d' |
+    awk '{print $1,$2}'
+  args:
+    chdir: '{{ chart_charts_dir }}'
+  register: chart_dependencies
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+- include_tasks: 'package-chart.yaml'
+  vars:
+    chart_current_chart: '{{ item.split(" ")[0] }}'
+    chart_current_version: '{{ item.split(" ")[1] }}-{{ chart_chart_version_suffix }}'
+  with_items: >-
+    {{ chart_dependencies.stdout_lines
+    if chart_dependencies is not skipped
+    else [] }}
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+# `chart_dependencies` can be overridden by previous nested task. So we re-run
+# this task to regain the dependency list for `chart_current_chart`.
+- name: get chart's dependencies
+  shell: >-
+    helm dep list {{ chart_current_chart }} |
+    sed '1d;$d' |
+    awk '{print $1,$2}'
+  args:
+    chdir: '{{ chart_charts_dir }}'
+  register: chart_dependencies
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+- name: create dependent chart directory
+  file:
+    path: '{{ chart_charts_dir }}/{{ chart_current_chart }}/charts'
+    state: directory
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+- name: add dependent chart packages
+  shell: >-
+    helm fetch {{ chart_project_name }}-charts/{{ chart_dep_item.split(" ")[0] }}
+    --version {{ chart_dep_item.split(" ")[1] }}-{{ chart_chart_version_suffix }}
+    --destination {{ chart_charts_dir }}/{{ chart_current_chart }}/charts
+  with_items: >-
+    {{ chart_dependencies.stdout_lines
+    if chart_dependencies is not skipped
+    else [] }}
+  loop_control:
+    loop_var: chart_dep_item
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+- name: package current chart
+  shell: >-
+    helm package {{ chart_current_chart }}
+    --version {{ chart_current_version }}
+  args:
+    chdir: '{{ chart_charts_dir }}'
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+- name: upload chart archive to package repo
+  shell: >-
+    helm gcs push
+    {{ chart_current_chart }}-{{ chart_current_version }}.tgz
+    gs://{{ chart_project_name }}-charts
+  args:
+    chdir: '{{ chart_charts_dir }}'
+  when: >-
+    "No results found"
+    in
+    lookup("vars", "chart_exists_" + chart_current_chart).stdout
+
+- name: refresh helm repo information after packaging
+  shell: helm repo update
+
+- debug:
+    msg: "Exit {{ chart_current_chart }} {{ chart_current_version }}"

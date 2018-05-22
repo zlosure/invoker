@@ -1,0 +1,11 @@
+---
+# Common tasks to be run from playbooks.
+# This role also provides tasks to be imported by other roles.
+
+- import_tasks: auth-gcloud.yaml
+  tags:
+    - common:auth-gcloud
+
+- import_tasks: init-helm.yaml
+  tags:
+    - common:init-helm

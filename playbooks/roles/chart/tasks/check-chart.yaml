@@ -1,0 +1,23 @@
+---
+# Package a chart if a chart doesn't exist in package repository.
+
+- name: update information of helm package repository
+  shell: helm repo update
+
+- name: check if chart archive already exists in package repo
+  shell: >-
+    helm search
+    -r '\v{{ chart_project_name }}-charts/{{ chart_chart_name }}\v'
+    -v '{{ chart_chart_version }}'
+  register: chart_chart_exists
+
+- include_tasks: package-chart.yaml
+  vars:
+    chart_charts_dir: >-
+      {{ chart_charts_dir_local
+      if chart_charts_dir_remote is skipped
+      else
+      chart_charts_dir_remote.path }}
+    chart_current_chart: '{{ chart_chart_name }}'
+    chart_current_version: '{{ chart_chart_version }}'
+  when: '"No results found" in chart_chart_exists.stdout'

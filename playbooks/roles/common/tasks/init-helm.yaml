@@ -1,0 +1,19 @@
+---
+# Initialize Helm client, install plugin and add charts repository.
+
+- name: initialize Helm client
+  shell: helm init --service-account tiller --wait
+
+- name: install Helm GCS plugin
+  shell: >-
+    helm plugin install https://github.com/viglesiasce/helm-gcs.git
+    --version v0.2.0
+
+# Task will be skipped inside the command if `index.yaml` exists.
+- name: initialize Helm chart repo
+  shell: helm gcs init gs://{{ common_project_name }}-charts
+
+- name: add charts repository
+  shell: >-
+    helm repo add {{ common_project_name }}-charts
+    gs://{{ common_project_name }}-charts

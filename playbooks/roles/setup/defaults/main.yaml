@@ -1,0 +1,9 @@
+---
+setup_chart_repo_name: '{{ ansible_env.PROJECT_NAME }}-charts'
+setup_compute_zone: '{{ ansible_env.COMPUTE_ZONE }}'
+setup_gcs_bucket_zone: '{{ ansible_env.GCS_BUCKET_ZONE }}'
+setup_namespace: '{{ namespace }}'
+setup_project_name: '{{ ansible_env.PROJECT_NAME }}'
+
+required_vars:
+  - namespace

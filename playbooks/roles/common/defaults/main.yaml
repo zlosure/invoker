@@ -1,0 +1,4 @@
+---
+common_compute_zone: '{{ ansible_env.COMPUTE_ZONE }}'
+common_cluster_name: '{{ ansible_env.CLUSTER_NAME }}'
+common_project_name: '{{ ansible_env.PROJECT_NAME }}'

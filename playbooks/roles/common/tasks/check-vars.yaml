@@ -1,0 +1,5 @@
+---
+- name: check required variables are set for current role
+  fail: msg="{{ item }} is not defined"
+  when: item not in vars
+  with_items: "{{ required_vars }}"

@@ -1,0 +1,11 @@
+---
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - 'https://github.com/zlosure/${REPO_NAME}.git#master'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/${REPO_NAME}:master'
+    timeout: 600s
+images:
+  - 'gcr.io/${PROJECT_ID}/${REPO_NAME}:master'

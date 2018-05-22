@@ -1,0 +1,6 @@
+---
+- hosts: localhost
+  roles:
+    - chart
+    - image
+    - cluster

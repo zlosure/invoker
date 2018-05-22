@@ -1,0 +1,22 @@
+#!/bin/bash
+
+case "$CONTAINER_LOCATION" in
+    local)
+        echo "local!"
+        $@
+        ;;
+    cluster)
+        echo "cluster!"
+        ansible-playbook playbooks/util.yaml --tags common:init-helm
+        lein repl :headless
+        ;;
+    test)
+        ansible-playbook playbooks/util.yaml \
+                         --tags common:auth-gcloud,common:init-helm \
+                         --extra-vars common_keyfile_path=/zlosure/invoker/credentials/${PROJECT_NAME}-*.json
+        /bin/bash
+        ;;
+    *)
+        echo "Wrong wrong wrong!"
+        ;;
+esac

@@ -1,0 +1,6 @@
+---
+# Main playbook to bootstrap local or cluster environment.
+
+- hosts: localhost
+  roles:
+    - setup

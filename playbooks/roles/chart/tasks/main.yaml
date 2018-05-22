@@ -1,0 +1,12 @@
+---
+# Build chart dependencies and package chart.
+
+- import_role:
+    name: common
+    tasks_from: check-vars
+  tags:
+    - always
+
+- import_tasks: check-chart.yaml
+  tags:
+    - always

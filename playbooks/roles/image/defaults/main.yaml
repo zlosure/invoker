@@ -1,0 +1,10 @@
+---
+image_chart_name: '{{ repo_name }}'
+image_chart_version: '{{ inspect_chart_version.stdout }}'
+image_chart_version_suffix: '{{ inspect_chart_version_suffix }}'
+image_charts_branch: '{{ charts_branch | default("master") }}'
+image_project_name: '{{ ansible_env.PROJECT_NAME }}'
+image_target_branch: '{{ target_branch | default("master") }}'
+
+required_vars:
+  - repo_name

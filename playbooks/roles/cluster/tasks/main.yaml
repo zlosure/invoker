@@ -1,0 +1,18 @@
+---
+- import_role:
+    name: common
+    tasks_from: check-vars
+  tags:
+    - always
+
+- import_tasks: install-release.yaml
+  tags:
+    - cluster:install
+
+- import_tasks: delete-release.yaml
+  tags:
+    - cluster:delete
+
+- import_tasks: upgrade-release.yaml
+  tags:
+    - cluster:upgrade

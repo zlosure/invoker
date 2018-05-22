@@ -1,0 +1,40 @@
+#!/bin/bash
+
+unset -f docker
+
+set -o nounset
+set -o errexit
+
+usage() {
+    cat <<EOF
+
+    Invoker upgrade CLI.
+
+EOF
+}
+
+while getopts "B:b:hn:t:" opt;
+do
+    case ${opt} in
+        B) charts_branch="$OPTARG"
+           ;;
+        b) target_branch="$OPTARG"
+           ;;
+        h) usage
+           exit 0
+           ;;
+        n) namespace="$OPTARG"
+           ;;
+        t) target="$OPTARG"
+           ;;
+        ?)
+        ;;
+    esac
+done
+
+ansible-playbook playbooks/upgrade.yaml \
+                 --tags cluster:upgrade \
+                 --extra-vars repo_name=${target} \
+                 --extra-vars namespace=${namespace} \
+                 ${charts_branch+--extra-vars charts_branch=${charts_branch}} \
+                 ${target_branch+--extra-vars target_branch=${target_branch}}

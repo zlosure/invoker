@@ -1,0 +1,2 @@
+{:service {:port #profile {:dev 8080
+                           :test 8082}}}

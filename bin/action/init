@@ -1,0 +1,217 @@
+#!/bin/bash
+
+unset -f docker
+
+set -o nounset
+set -o errexit
+
+cat <<EOF
+
+Welcome to Invoker! This command will take you through the configuration process.
+
+EOF
+
+current_dir=$(cd $(dirname "${BASH_SOURCE[0]}") >/dev/null && pwd)
+
+config_dir=$(dirname $(dirname $current_dir))/config
+
+bin_dir=$(dirname $current_dir)
+
+if [[ -f "${config_dir}/main.env" ]]; then
+    source ${config_dir}/main.env
+    cat <<EOF
+Settings from your current configuration are
+
+project:                               ${PROJECT_NAME}
+cluster:                               ${CLUSTER_NAME}
+charts GitHub URL:                     ${CHARTS_REPO}
+Google Compute Engine(GCE) zone:       ${COMPUTE_ZONE}
+Google Cloud Storage(GCS) bucket zone: ${GCS_BUCKET_ZONE}
+
+Pick your action:
+
+EOF
+    select reinitialize_selection in "Re-initialize current config" "Bootstrap cluster with current config" "Exit"; do
+        case "${reinitialize_selection}" in
+            "Re-initialize current config")
+                echo ""
+                echo "Pick project to use:"
+                select project_name_selection in "${PROJECT_NAME}" "<new value>"; do
+                    case "${project_name_selection}" in
+                        "${PROJECT_NAME}")
+                            break
+                            ;;
+                        "<new value>")
+                            read -p "Enter the name of your new project: " project_name_override
+                            break
+                            ;;
+                    esac
+                done
+
+                echo ""
+                echo "Pick cluster to use:"
+                select cluster_name_selection in "${CLUSTER_NAME}" "<new value>"; do
+                    case "${cluster_name_selection}" in
+                        "${CLUSTER_NAME}")
+                            break
+                            ;;
+                        "<new value>")
+                            read -p "Enter the name of your new cluster: " cluster_name_override
+                            break
+                            ;;
+                    esac
+                done
+
+                echo ""
+                echo "Pick charts GitHub URL to use:"
+                select charts_repo_selection in "${CHARTS_REPO}" "<new value>"; do
+                    case "${charts_repo_selection}" in
+                        "${CHARTS_REPO}")
+                            break
+                            ;;
+                        "<new value>")
+                            read -p "Enter the URL of your new charts repo: " charts_repo_override
+                            break
+                            ;;
+                    esac
+                done
+
+                echo ""
+                echo "Pick GCE zone to use:"
+                select compute_zone_selection in "${COMPUTE_ZONE}" "<new value>"; do
+                    case "${compute_zone_selection}" in
+                        "${COMPUTE_ZONE}")
+                            break
+                            ;;
+                        "<new value>")
+                            read -p "Enter the value of your new GCE zone: " compute_zone_override
+                            break
+                            ;;
+                    esac
+                done
+
+                echo ""
+                echo "Pick GCS bucket zone to use:"
+                select gcs_bucket_zone_selection in "${GCS_BUCKET_ZONE}" "<new value>"; do
+                    case "${gcs_bucket_zone_selection}" in
+                        "${GCS_BUCKET_ZONE}")
+                            break
+                            ;;
+                        "<new value>")
+                            read -p "Enter the value of your new GCS bucket zone: " gcs_bucket_zone_override
+                            break
+                            ;;
+                    esac
+                done
+
+                cat <<EOF
+
+Your new configuration settings are:
+
+project:                               ${project_name_override:-$PROJECT_NAME}
+cluster:                               ${cluster_name_override:-$CLUSTER_NAME}
+charts GitHub URL:                     ${charts_repo_override:-$CHARTS_REPO}
+Google Compute Engine(GCE) zone:       ${compute_zone_override:-$COMPUTE_ZONE}
+Google Cloud Storage(GCS) bucket zone: ${gcs_bucket_zone_override:-$GCS_BUCKET_ZONE}
+
+Saving to ${config_dir}/main.env...
+
+EOF
+
+                cat <<EOF > ${config_dir}/main.env
+CHARTS_REPO=${charts_repo_override:-$CHARTS_REPO}
+CLUSTER_NAME=${cluster_name_override:-$CLUSTER_NAME}
+COMPUTE_ZONE=${compute_zone_override:-$COMPUTE_ZONE}
+GCS_BUCKET_ZONE=${gcs_bucket_zone_override:-$GCS_BUCKET_ZONE}
+PROJECT_NAME=${project_name_override:-$PROJECT_NAME}
+EOF
+
+                cat <<EOF
+Your new configuration is in place, do you want to bootstrap cluster with new settings?
+
+EOF
+                select bootstrap_selection in "Yes" "No"; do
+                    case "${bootstrap_selection}" in
+                        "Yes")
+                            ${bin_dir}/invoker -a bootstrap -n admin -t cluster
+                            break
+                            ;;
+                        "No")
+                            break
+                            ;;
+                    esac
+                done
+
+                break
+                ;;
+
+            "Bootstrap cluster with current config")
+                ${bin_dir}/invoker -a bootstrap -n admin -t cluster
+                break
+                ;;
+            "Exit")
+                exit
+                ;;
+        esac
+    done
+
+else
+    cat <<EOF
+Looks like you haven't set up any configuration yet, do you want to create one?
+
+EOF
+    select configuration_selection in "Yes" "No"; do
+        case "${configuration_selection}" in
+            "Yes")
+                read -p "Google Cloud Platform(GCP) project name: " project_name_new
+                read -p "Google Kubernetes Engine(GKE) cluster name: " cluster_name_new
+                read -p "Helm charts repository GitHub URL: " charts_repo_new
+                read -p "Google Compute Engine(GCE) zone: " compute_zone_new
+                read -p "Google Cloud Storage(GCS) bucket zone: " gcs_bucket_zone_new
+
+                cat <<EOF
+
+Your new configuration settings are:
+
+project:                               ${project_name_new}
+cluster:                               ${cluster_name_new}
+charts GitHub URL:                     ${charts_repo_new}
+Google Compute Engine(GCE) zone:       ${compute_zone_new}
+Google Cloud Storage(GCS) bucket zone: ${gcs_bucket_zone_new}
+
+Saving to ${config_dir}/main.env...
+
+EOF
+
+                cat <<EOF > ${config_dir}/main.env
+CHARTS_REPO=${charts_repo_new}
+CLUSTER_NAME=${cluster_name_new}
+COMPUTE_ZONE=${compute_zone_new}
+GCS_BUCKET_ZONE=${gcs_bucket_zone_new}
+PROJECT_NAME=${project_name_new}
+EOF
+
+                cat <<EOF
+Your new configuration is in place, do you want to bootstrap cluster with new settings?
+
+EOF
+                select bootstrap_selection in "Yes" "No"; do
+                    case "${bootstrap_selection}" in
+                        "Yes")
+                            ${bin_dir}/invoker -a bootstrap -n admin -t cluster
+                            break
+                            ;;
+                        "No")
+                            break
+                            ;;
+                    esac
+                done
+
+                break
+                ;;
+            "No")
+                break
+                ;;
+        esac
+    done
+fi

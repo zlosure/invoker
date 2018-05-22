@@ -1,0 +1,16 @@
+---
+# Authorize access to Google Cloud Platform with a service account
+
+# Required valiable:
+# - common_keyfile_path
+
+- name: auth gcloud with a service account
+  shell: >-
+    gcloud auth activate-service-account
+    --key-file {{ common_keyfile_path }}
+
+- name: fetch credentials for a running GKE cluster
+  shell: >-
+    gcloud container clusters get-credentials {{ common_cluster_name }}
+    --project {{ common_project_name }}
+    --zone {{ common_compute_zone }}

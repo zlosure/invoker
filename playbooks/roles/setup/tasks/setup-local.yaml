@@ -1,0 +1,74 @@
+---
+# Tasks to setup local environment. (VPN and NFS)
+
+# ------------------------------------------------------------------------------
+# Auth GCloud
+
+- name: find gcloud service account key files from local
+  find:
+    paths: /zlosure/invoker/credentials
+    patterns: '{{ setup_project_name }}-.*.json'
+    use_regex: yes
+  register: setup_service_account_keyfile
+
+- import_role:
+    name: common
+    tasks_from: auth-gcloud
+  vars:
+    common_keyfile_path: '{{ setup_service_account_keyfile.files[0].path }}'
+
+# ------------------------------------------------------------------------------
+# VPN
+
+- name: set VPN keyfile name
+  set_fact:
+    setup_vpn_keyfile_name: '{{ setup_project_name }}-vpn'
+
+- name: find vpn keyfile from local
+  find:
+    paths: /zlosure/invoker/credentials/
+    patterns: '{{ setup_vpn_keyfile_name }}.ovpn'
+    recurse: no
+    file_type: file
+  register: setup_vpn_keyfile_local
+
+- block:
+    - name: get VPN pod
+      shell: >-
+        kubectl get pods
+        -n ovpn
+        -l app=openvpn,release=ovpn
+        -o jsonpath='{ .items[0].metadata.name }'
+      register: setup_vpn_pod_name
+
+    - name: copy VPN keyfile to local
+      shell: >-
+        kubectl exec -n ovpn -it {{ setup_vpn_pod_name.stdout }}
+        cat /etc/openvpn/certs/pki/{{ setup_vpn_keyfile_name }}.ovpn >
+        /zlosure/invoker/credentials/{{ setup_vpn_keyfile_name }}.ovpn
+
+  when: setup_vpn_keyfile_local.files == []
+
+# ------------------------------------------------------------------------------
+# Initialize Helm and charts repository
+
+- import_role:
+    name: common
+    tasks_from: init-helm
+
+# ------------------------------------------------------------------------------
+# Personal NFS server
+
+- import_role:
+    name: common
+    tasks_from: get-release-name
+  vars:
+    common_chart_name: 'personal-nfs-server'
+    common_namespace: '{{ setup_namespace }}'
+
+- set_fact:
+    setup_personal_nfs_server_release: '{{ common_release_name }}'
+
+- name: install personal NFS server
+  shell: invoker -a install -n {{ setup_namespace }} -t personal-nfs-server
+  when: setup_personal_nfs_server_release.stdout == ''

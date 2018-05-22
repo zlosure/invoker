@@ -1,0 +1,122 @@
+---
+# Build internal images and skip external images directly from Helm package repo
+# It assumes all the chart informatino are in place for remote charts.
+
+- debug:
+    msg: "Building {{ image_current_chart }} {{ image_current_version }}"
+
+# TODO: Create an issue in Helm for `helm dep list` taking chart reference URL.
+- name: fetch chart archive from package repository
+  shell: >-
+    helm fetch {{ image_project_name }}-charts/{{ image_current_chart }}
+    --version {{ image_current_version }}
+  args:
+    chdir: '/tmp'
+
+- name: regsiter dependent charts
+  shell: >-
+    helm dep list {{ image_current_chart }}-{{ image_current_version }}.tgz |
+    sed '1d;$d' |
+    awk '{print $1,$2}'
+  args:
+    chdir: '/tmp'
+  register: image_chart_dep
+
+- name: clean up package after use
+  file:
+    path: '/tmp/{{ image_current_chart }}-{{ image_current_version }}.tgz'
+    state: absent
+
+- include_tasks: 'build-image.yaml'
+  vars:
+    image_current_chart: '{{ item.split(" ")[0] }}'
+    image_current_version: '{{ item.split(" ")[1] }}-{{ image_chart_version_suffix }}'
+    image_is_dep: true
+  with_items: '{{ image_chart_dep.stdout_lines }}'
+  when: image_chart_dep.stdout != ''
+
+- name: get image repository
+  shell: >-
+    helm inspect values {{ image_project_name }}-charts/{{ image_current_chart }}
+    --version {{ image_current_version }} |
+    grep 'repository' |
+    awk '{ print $2 }'
+  register: image_image_repository
+
+# We use image tag in charts for external images and dependent applications, but
+# use `image_target_branch` value(default `master`) for top level application.
+- name: get image tag
+  shell: >-
+    helm inspect values {{ image_project_name }}-charts/{{ image_current_chart }}
+    --version {{ image_current_version }} |
+    grep 'tag' |
+    awk '{ print $2 }'
+  register: image_image_tag
+
+- block:
+    # Internal images.
+    # We pull master image as cache in cloud build step to speed up the process.
+    # These tasks are to ensure we have any master image to pull, which will
+    # only be run once for each project at the beginning.
+    - name: check if any master image exists in GCR
+      shell: >-
+        gcloud container images list-tags {{ image_image_repository.stdout }}
+        --filter=master
+      register: image_master_exists_gcr
+
+    # TODO: Clean up config literal below.
+    - name: cloud build master image
+      shell: >-
+        gcloud builds submit
+        --config=/zlosure/invoker/cloudbuild-master.yaml
+        --substitutions=REPO_NAME={{ image_current_chart }}
+        --project={{ image_project_name }}
+      when: '"Listed 0 items." in image_master_exists_gcr.stderr'
+
+    - name: get remote latest git short hash for repo branch
+      shell: >-
+        git ls-remote https://github.com/zlosure/{{ image_current_chart }}.git
+        refs/heads/{{ image_image_tag.stdout if image_is_dep is defined else image_target_branch }} |
+        awk '{ print substr($1,1,7) }'
+      failed_when: image_git_hash == ''
+      register: image_git_hash
+
+    - name: check if image exists in GCR
+      shell: >-
+        gcloud container images list-tags {{ image_image_repository.stdout }}
+        --filter='{{ image_git_hash.stdout }} AND {{ image_image_tag.stdout if image_is_dep is defined else image_target_branch }}'
+      register: image_exists_gcr
+
+    - name: cloud build image
+      shell: >-
+        gcloud builds submit
+        --config=/zlosure/invoker/cloudbuild.yaml
+        --substitutions=REPO_NAME={{ image_current_chart }},SHORT_SHA={{ image_git_hash.stdout }},BRANCH_NAME={{ image_image_tag.stdout if image_is_dep is defined else image_target_branch }}
+        --project={{ image_project_name }}
+      when: '"Listed 0 items." in image_exists_gcr.stderr'
+
+  when: image_project_name in image_image_repository.stdout
+
+- block:
+    # External images.
+    - name: check if external image exists in Docker Hub
+      uri:
+        url: 'https://index.docker.io/v1/repositories/{{ image_image_repository.stdout }}/tags/{{ image_image_tag.stdout }}'
+        method: GET
+        status_code:
+          - 200
+          - 404
+      register: image_exists_hub_external
+
+    - name: check if external image exists in GCR
+      shell: >-
+        gcloud container images list-tags {{ image_image_repository.stdout }}
+        --filter={{ image_image_tag.stdout }}
+      register: image_exists_gcr_external
+      failed_when: '"Listed 0 items." in image_exists_gcr_external.stderr'
+      when: image_exists_hub_external == 404
+
+  when: image_project_name not in image_image_repository.stdout
+
+- debug:
+    msg: "Built {{ image_current_chart }} {{ image_current_version }}"

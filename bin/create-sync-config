@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# We need to dynamically create this file as lsyncd required absolute path for
+# source and target path. But we want it to be relative to our HOME directory.
+
+cat <<EOF > config/lsyncd.conf
+settings {
+   logfile    = "/tmp/lsyncd.log",
+   statusFile = "/tmp/lsyncd.status",
+   nodaemon   = false
+}
+
+sync {
+   default.rsync,
+   source = "$HOME/.lein",
+   target = "$HOME/zlosure/nfs/.lein",
+   delay  = 1,
+   rsync  = {
+      binary = "/usr/local/bin/rsync",
+      _extra = {
+          "--include=profiles.clj",
+          "--exclude=*"
+      }
+   }
+}
+EOF

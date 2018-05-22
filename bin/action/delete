@@ -1,0 +1,34 @@
+#!/bin/bash
+
+unset -f docker
+
+set -o nounset
+set -o errexit
+
+usage() {
+    cat <<EOF
+
+    Invoker delete CLI.
+
+EOF
+}
+
+while getopts "hn:t:" opt;
+do
+    case ${opt} in
+        h) usage
+           exit 0
+           ;;
+        n) namespace="$OPTARG"
+           ;;
+        t) target="$OPTARG"
+           ;;
+        ?)
+        ;;
+    esac
+done
+
+ansible-playbook playbooks/delete.yaml \
+                 --tags cluster:delete \
+                 --extra-vars repo_name=${target} \
+                 --extra-vars namespace=${namespace}

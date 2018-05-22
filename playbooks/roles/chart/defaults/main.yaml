@@ -1,0 +1,10 @@
+---
+chart_chart_name: '{{ repo_name }}'
+chart_chart_version: '{{ inspect_chart_version.stdout }}'
+chart_chart_version_suffix: '{{ inspect_chart_version_suffix }}'
+chart_charts_dir_local: '{{ inspect_charts_dir_local }}'
+chart_charts_dir_remote: '{{ inspect_charts_dir_remote }}'
+chart_project_name: '{{ ansible_env.PROJECT_NAME }}'
+
+required_vars:
+  - repo_name

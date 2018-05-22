@@ -1,0 +1,14 @@
+.DS_Store
+.lein-failures
+.lein-repl-history
+.nrepl-port
+*.retry
+credentials/
+target/
+logs/
+config/lsyncd.conf
+config/main.env
+
+# TODO: Remove
+test.yaml
+http-client.txt

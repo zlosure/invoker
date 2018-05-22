@@ -1,0 +1,75 @@
+---
+# Decide if a repo's chart exists in local or remote by chart name,
+# and then register chart information for those variables:
+# - inspect_chart_version
+# - inspect_image_repository
+
+- name: look up chart in local charts directory
+  stat:
+    path: '{{ inspect_charts_dir_local }}/{{ inspect_chart_name }}'
+  register: inspect_chart_exists_local
+
+- block:
+    # TODO: Consider the best way to clean up temp dir.
+    # Be aware, this temp dir will possibly be used after this role.
+    - name: create a temparory directory for remote charts repository
+      tempfile:
+        state: directory
+        prefix: 'charts'
+      register: inspect_charts_dir_remote
+
+    - name: clone remote charts repository
+      git:
+        repo: '{{ inspect_charts_repo }}'
+        dest: '{{ inspect_charts_dir_remote.path }}'
+        version: '{{ inspect_charts_branch }}'
+
+    # Fail if chart doesn't exist in local nor remote
+    - name: look up chart in remote charts directory
+      stat:
+        path: '{{ inspect_charts_dir_remote.path }}/{{ inspect_chart_name }}'
+      register: inspect_chart_exists_remote
+      failed_when: >-
+        not inspect_chart_exists_remote.stat.exists or
+        not inspect_chart_exists_remote.stat.isdir
+
+  when: >-
+    not inspect_chart_exists_local.stat.exists or
+    not inspect_chart_exists_local.stat.isdir
+
+# TODO: Waiting for Helm to provide --output option
+# https://github.com/helm/helm/issues/5070
+- name: get image repository from chart
+  shell: >-
+    helm inspect values {{ inspect_chart_name }} |
+    grep 'repository' |
+    awk '{ print $2 }'
+  args:
+    chdir: >-
+      {{ inspect_charts_dir_local
+      if inspect_chart_exists_local.stat.exists and inspect_chart_exists_local.stat.isdir
+      else
+      inspect_charts_dir_remote.path}}
+  register: inspect_image_repository
+
+- set_fact:
+    inspect_chart_version_suffix: >-
+      {{ 'master'
+      if inspect_chart_exists_local.stat.exists and inspect_chart_exists_local.stat.isdir
+      else
+      inspect_charts_branch | regex_replace('[^a-zA-Z0-9]+') }}
+
+# Attach charts-branch as pre-release version at the end to avoid managing
+# versions across team and it's hidden from outside.
+- name: get chart version from chart
+  shell: >-
+    helm inspect chart {{ inspect_chart_name }} |
+    grep 'version' |
+    awk '{ print $2"-{{ inspect_chart_version_suffix }}" }'
+  args:
+    chdir: >-
+      {{ inspect_charts_dir_local
+      if inspect_chart_exists_local.stat.exists and inspect_chart_exists_local.stat.isdir
+      else
+      inspect_charts_dir_remote.path}}
+  register: inspect_chart_version

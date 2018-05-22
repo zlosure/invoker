@@ -1,0 +1,16 @@
+---
+# Setup cluster/local environment or initilize Helm.
+
+- import_role:
+    name: common
+    tasks_from: check-vars
+  tags:
+    - always
+
+- import_tasks: setup-local.yaml
+  tags:
+    - setup:local
+
+- import_tasks: setup-cluster.yaml
+  tags:
+    - setup:cluster

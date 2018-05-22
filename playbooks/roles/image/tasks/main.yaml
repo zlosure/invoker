@@ -1,0 +1,15 @@
+---
+# Build an image in cloud and push to GCR.
+
+- import_role:
+    name: common
+    tasks_from: check-vars
+  tags:
+    - always
+
+- import_tasks: 'build-image.yaml'
+  vars:
+    image_current_chart: '{{ image_chart_name }}'
+    image_current_version: '{{ image_chart_version }}'
+  tags:
+    - always

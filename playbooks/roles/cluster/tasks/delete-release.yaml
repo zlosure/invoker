@@ -1,0 +1,24 @@
+---
+# Helm delete a release from cluster.
+
+# Deleting configmap before deleting release could potentially result in release
+# without configmap if the latter fails. but putting it after deleting release
+# will always cause being unable to delete configmap.
+- name: special case to delete invoker configmap
+  shell: kubectl -n {{ cluster_namespace }} delete configmap {{ cluster_chart_name }}
+  when: cluster_chart_name == "invoker"
+
+- name: get release name
+  import_role:
+    name: common
+    tasks_from: get-release-name
+  vars:
+    common_chart_name: '{{ cluster_chart_name }}'
+    common_namespace: '{{ cluster_namespace }}'
+
+- set_fact:
+    cluster_release_name: '{{ common_release_name }}'
+
+- name: delete helm release
+  shell: helm del --purge {{ cluster_release_name.stdout }}
+  when: cluster_release_name.stdout != ''

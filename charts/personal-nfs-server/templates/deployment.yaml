@@ -1,0 +1,36 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - name: nfs
+              containerPort: {{ .Values.service.nfsPort }}
+            - name: mountd
+              containerPort: {{ .Values.service.mountdPort }}
+            - name: rpcbind
+              containerPort: {{ .Values.service.rpcbindPort }}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /exports
+              name: nfs-volume
+      volumes:
+        - name: nfs-volume
+          persistentVolumeClaim:
+            claimName: {{ .Chart.Name }}

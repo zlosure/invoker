@@ -1,0 +1,34 @@
+---
+# Helm upgrade a release by image branch tag from GCR.
+
+- name: get release name
+  import_role:
+    name: common
+    tasks_from: get-release-name
+  vars:
+    common_chart_name: '{{ cluster_chart_name }}'
+    common_namespace: '{{ cluster_namespace }}'
+
+- set_fact:
+    cluster_release_name: '{{ common_release_name }}'
+
+- block:
+    - name: get image short hash from GCR
+      shell: >-
+        gcloud container images list-tags {{ cluster_image_repository.stdout }}
+        --filter={{ cluster_target_branch }} |
+        awk '$2 ~ /{{ cluster_target_branch }}/ { print $2 }' |
+        sed -e "s/{{ cluster_target_branch }}//" -e "s/,//"
+      register: cluster_git_hash
+
+    - name: upgrade helm release
+      shell: >-
+        helm upgrade
+        {{ cluster_release_name.stdout }}
+        {{ cluster_helm_package_repo }}/{{ cluster_chart_name }}
+        --set image.tag='{{ cluster_git_hash.stdout }}'
+        --version {{ cluster_chart_version.stdout }}
+        --timeout 120
+        --wait
+
+  when: cluster_release_name.stdout != ''

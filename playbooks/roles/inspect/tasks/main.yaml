@@ -1,0 +1,14 @@
+---
+# Inspect information that can be used by other roles, but only need to be
+# inspected ONCE. However, `common` role imported below may be run several times
+# duplicately.
+
+- import_role:
+    name: common
+    tasks_from: check-vars
+  tags:
+    - always
+
+- import_tasks: chart-info.yaml
+  tags:
+    - always

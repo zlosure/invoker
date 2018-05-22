@@ -1,0 +1,29 @@
+# Default values for personal-nfs-server.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: gcr.io/google_containers/volume-nfs
+  tag: 0.8
+
+ingress:
+  enabled: false
+  annotations: {}
+  path: /
+  hosts:
+    - chart-example.local
+  tls: []
+
+persistence:
+  enabled: true
+  storageClass: "nfs"
+  accessMode: ReadWriteOnce
+  size: "2Gi"
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  nfsPort: 2049
+  mountdPort: 20048
+  rpcbindPort: 111

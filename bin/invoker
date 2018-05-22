@@ -1,0 +1,91 @@
+#!/bin/bash
+
+set -o nounset
+set -o errexit
+
+# Usage help function
+usage() {
+    cat <<EOF
+
+    Invoker main CLI.
+
+    Usage:
+      invoker -a (bootstrap|delete|init|install|upgrade) -n <ns> -t <repo> -B <charts-branch> -b <target-branch>
+      invoker -h
+
+    Example:
+      invoker -a init
+      invoker -a bootstrap -n my-ns -t local
+      invoker -a install -n my-ns -t hello-world -b new-branch
+      invoker -a upgrade -n my-ns -t hello-world -B bump-version
+      invoker -a delete -n my-ns -t hello-world
+
+    Options:
+      -a, --action          Cluster action. (required)
+                            * bootstrap -- Bootstrap environment.
+                            * delete    -- Delete a release from cluster.
+                            * init      -- Initialize configuration.
+                            * install   -- Install a chart to cluster.
+                            * upgrade   -- Upgrade a release by a new image or manifests.
+      -B, --charts-branch   Branch of charts repository. (default 'master')
+      -b, --target-branch   Target's Git branch.
+      -h, --help            Show this screen.
+      -n, --namespace       Namespace context in cluster. (required)
+      -t, --target          Target to which this command is applied. (required)
+
+EOF
+}
+
+# Parse command options
+while getopts "a:B:b:hn:t:" opt;
+do
+    case ${opt} in
+        a) action="$OPTARG"
+           ;;
+        B) charts_branch="$OPTARG"
+           ;;
+        b) target_branch="$OPTARG"
+           ;;
+        h) usage
+           exit 0
+           ;;
+        n) namespace="$OPTARG"
+           ;;
+        t) target="$OPTARG"
+           ;;
+        ?) usage
+        exit 2
+        ;;
+    esac
+done
+
+# Get the current directory absolute path
+# https://stackoverflow.com/questions/59895/getting-the-source-directory-of-a-bash-script-from-within
+current_dir=$(cd $(dirname "${BASH_SOURCE[0]}") >/dev/null && pwd)
+
+# Dispatch by action, only pass optional params when set
+case ${action} in
+    bootstrap)
+        ${current_dir}/action/bootstrap -n $namespace -t $target
+        ;;
+    delete)
+        ${current_dir}/action/delete -n $namespace -t $target
+        ;;
+    init)
+        ${current_dir}/action/init
+        ;;
+    install)
+        ${current_dir}/action/install -n $namespace -t $target \
+                      ${charts_branch+-B $charts_branch} \
+                      ${target_branch+-b $target_branch}
+        ;;
+    upgrade)
+        ${current_dir}/action/upgrade -n $namespace -t $target \
+                      ${charts_branch+-B $charts_branch} \
+                      ${target_branch+-b $target_branch}
+        ;;
+    *)
+        usage
+        exit 127
+        ;;
+esac

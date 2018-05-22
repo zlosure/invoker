@@ -1,0 +1,18 @@
+---
+# Get a helm release name by chart and namespace.
+
+# Required valiable:
+# - common_chart_name
+# - common_namespace
+
+# Registered variable:
+# - common_release_name
+
+# TODO: Parse output based on header instead of posititon.
+- name: get helm release name by chart and namespace
+  shell: >-
+    helm ls |
+    awk -F'\t'
+    '$5 ~ /^{{ common_chart_name }}/ && $7 ~ /{{ common_namespace }}/ { print $1 }' |
+    tr -d ' '
+  register: common_release_name
