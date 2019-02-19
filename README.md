@@ -71,3 +71,5 @@ Content-Type: application/json
 24. [Feb. 8 2018] New UI.
 
 ![console](https://github.com/zlosure/console/blob/master/resources/console-overview.png)
+
+25. [Feb. 15 2018] First demo video. https://www.youtube.com/watch?v=2dS17sjN_j8
