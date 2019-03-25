@@ -42,6 +42,11 @@
     in
     lookup("vars", "chart_exists_" + chart_current_chart).stdout
 
+# We are relying on `chart_depedencies` to be `skipped` for this task to be
+# `skipped` implicitly. The normal way is to add the `when` clause like we did
+# for most of the other tasks here. But given we are assigning
+# `chart_current_chart` a new value in this task, Ansible will use the new value
+# for `when` check which is definitely not what we want.
 - include_tasks: 'package-chart.yaml'
   vars:
     chart_current_chart: '{{ item.split(" ")[0] }}'
@@ -50,10 +55,6 @@
     {{ chart_dependencies.stdout_lines
     if chart_dependencies is not skipped
     else [] }}
-  when: >-
-    "No results found"
-    in
-    lookup("vars", "chart_exists_" + chart_current_chart).stdout
 
 # `chart_dependencies` can be overridden by previous nested task. So we re-run
 # this task to regain the dependency list for `chart_current_chart`.
