@@ -24,7 +24,7 @@
                    :dependencies [[io.pedestal/pedestal.service-tools "0.5.4"]
                                   [reloaded.repl "0.2.4"]]
                    ;; TODO: Move plugins to profiles.clj
-                   :plugins [[cider/cider-nrepl "0.18.0-SNAPSHOT"]]
+                   :plugins [[cider/cider-nrepl "0.21.1"]]
                    :repl-options {:init (go)
                                   :init-ns user
                                   :host "0.0.0.0"
