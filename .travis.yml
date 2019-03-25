@@ -9,14 +9,14 @@ git:
 
 jobs:
   include:
-    - stage: 'test'
-      name: 'Unit Tests'
-      script: lein with-profiles +test do clean, eftest :unit
-    - name: 'Uncategorized Tests'
-      script: lein with-profiles +test do clean, eftest :uncategorized
-    - stage: 'integration test'
-      name: 'Integration Tests'
-      script: lein with-profiles +test do clean, eftest :integration
+    # - stage: 'test'
+    #   name: 'Unit Tests'
+    #   script: lein with-profiles +test do clean, eftest :unit
+    # - name: 'Uncategorized Tests'
+    #   script: lein with-profiles +test do clean, eftest :uncategorized
+    # - stage: 'integration test'
+    #   name: 'Integration Tests'
+    #   script: lein with-profiles +test do clean, eftest :integration
     - stage: 'deployment'
       name: 'Deploy to Docker Hub'
       before_deploy: docker build -q -t ${DOCKER_USERNAME}/invoker .
